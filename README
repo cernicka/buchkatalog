@@ -1,0 +1,18 @@
+This is an example Perl Mojolicious application. It is a book catalogue,
+enabling you to create new books, search for and edit existing ones.
+
+This is still a work in progress, not much works. But you might enjoy reading
+the code and building upon it.
+
+Thanks go to the most excellent Mojolicious example I have found to date:
+
+http://blogs.perl.org/users/joel_berger/2012/10/a-simple-mojoliciousdbi-example.html
+
+In my first Mojolicious application you might find:
+
+- bad code
+- misunderstood concepts
+- bugs
+
+Cheers
+dedulo
