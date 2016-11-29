@@ -6,6 +6,9 @@ use Mojolicious::Lite;
 use DBI;
 use SQL::Abstract;
 
+my $dbh = DBI->connect( 'dbi:SQLite:dbname=katalog.db',
+	'', '', { sqlite_unicode => 1 } );
+
 # all fields from the form, database table Buch
 my @fields = (
 	'Kennziffer',         'Erscheinungsjahr',
@@ -19,28 +22,21 @@ my @fields = (
 	'Inhaltsverzeichnis', 'Zustand'
 );
 
-sub db_connect {
-	return DBI->connect( 'dbi:SQLite:dbname=katalog.db',
-		'', '', { sqlite_unicode => 1 } );
-}
-
 sub create_db {
-	my $db = db_connect();
-
-	$db->do("PRAGMA foreign_keys = ON");
-	$db->do(
+	$dbh->do("PRAGMA foreign_keys = ON");
+	$dbh->do(
 		'CREATE TABLE IF NOT EXISTS Zustand (
 				id INTEGER PRIMARY KEY,
 				Beschreibung text)'
 	);
 
 	my $sth =
-	  $db->prepare('insert into Zustand (id, Beschreibung) values ( ?, ?)');
+	  $dbh->prepare('insert into Zustand (id, Beschreibung) values ( ?, ?)');
 	$sth->execute( 0, 'Eintrag vollständig' );
 	$sth->execute( 1, 'Unkorrigiert' );
 	$sth->execute( 2, 'Ausgeliehen' );
 
-	$db->do(
+	$dbh->do(
 		'CREATE TABLE IF NOT EXISTS Buch (
 			id INTEGER PRIMARY KEY,
 			Kennziffer TEXT NOT NULL,
@@ -64,21 +60,57 @@ sub create_db {
 	);
 
 	return 1;
-
 }
 
 sub save_book {
-	my $blob = `cat foo.jpg`;
+	my $params = shift;
 
+	$DB::single = 1;
+
+	my $sql = SQL::Abstract->new;
+	my ( $query, @bind ) = $sql->insert( "Buch", $params );
+	my $sth = $dbh->prepare($query)
+	  or die "could not prepare statement\n", $dbh->errstr;
+	$sth->execute(@bind) or die "could not execute", $sth->errstr;
+
+	# for storing the form fields
+	#my %form;
+	#foreach my $field (@fields) {
+	#	$form{$field} = $c->param($field);
+	#}
+
+	#my $blob = `cat foo.jpg`;
 	#my $sth  = $db->prepare("INSERT INTO mytable VALUES (1, ?)");
 	#$sth->bind_param( 1, $blob, SQL_BLOB );
 	#$sth->execute();
 }
 
+helper book_count => sub {
+	my $c = shift;
+	my $sth =
+	  eval { $c->db->prepare('SELECT count(*) FROM Buch') } || return undef;
+	$sth->execute;
+	return $sth->fetchrow_array;
+};
+
+app->book_count || create_db();
+
+helper select => sub {
+	my $table = shift;
+	$dbh->do("select count(*) from $table");
+};
+
+helper select_status => sub {
+	my $c   = shift;
+	my $sth = $c->db->prepare("select id, Beschreibung from Zustand");
+	$sth->execute;
+	return $sth->fetchall_arrayref;
+};
+
 # this is what the code actually looks like, when bracketed
 helper(
 	db => sub {
-		state $db = db_connect();
+		$dbh;
 	}
 );
 
@@ -98,24 +130,23 @@ helper sql_select => sub {
 
 get '/' => sub {
 	my $c = shift;
-} => 'index';
+	$c->stash( count => $c->book_count() );
+	$c->render('index');
+};
 
 get '/form' => sub {
-	my $c = shift;
+	my $c    = shift;
+	my $rows = $c->select_status();
+	$c->stash( status => $rows );
 } => 'form';
 
 # save data from the form
 post '/save' => sub {
 	my $c = shift;
 
-	# for storing the form fields
-	my %form;
-
-	foreach my $field (@fields) {
-		$form{$field} = $c->param($field);
-	}
-
-	save_book( \%form );
+	#my $params = $c->req->params->names;
+	my $params = $c->req->params->to_hash;
+	save_book( $params, $c->req->uploads, $c->req->upload('Abbildung') );
 
 	#my $insert = $c->insert( $name, $age );
 
@@ -135,6 +166,7 @@ if ( exists $ENV{PAR_TEMP} && $^O eq "MSWin32" ) {
 	system qw(start http://localhost:3000);
 }
 
+app->secrets( ['M4DYA6MaIQGIcuNj3'] );
 app->start;
 
 __DATA__
@@ -142,7 +174,7 @@ __DATA__
 @@ index.html.ep
 % layout 'default';
 % title 'Katalog';
-<p>Bücher im Katalog: <%= Model::Buch->count %><br>
+<p>Bücher im Katalog: <%= $count %><br>
 
 <ul>
 	<li><a href="search">Suche</a>
@@ -157,13 +189,13 @@ __DATA__
 @@ form.html.ep
 % layout 'default';
 % title 'Katalog: Buch bearbeiten';
-<!--<body id="main_body" >
+<!--<body id="main_body" >-->
 
 	<img id="top" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAwIAAAAKCAYAAAAHB+lIAAAABGdBTUEAANbY1E9YMgAAABl0RVh0U29mdHdhcmUAQWRvYmUgSW1hZ2VSZWFkeXHJZTwAAAEzSURBVHja7NvrbsIwDAbQpBT2/q87xrIVtZPrXrQhlU3aOZJJIOW/Pxxqa60AAAD/Sz+81Fr3nqkPngEAAMdqj5wNw4D+G819XdlXgQAAAP5MAGg/DQb9RkO/tsbaCwUAAMDzwkBcY9V0Ft/PgsBe89+ldSsUAAAAzw0Bsd7TmkPAVxjYmwjE5n+oU9jnUCAMAADA74SA2PwPdRt78xwKNicCJYWALoWAPoWBriwnBAAAwPFBoKXmP4eAGAZKmU8IVoNAvg50CiHgnALBqSynAwAAwPFBIP7afxvrLQSAKQxMz9ewnwWBfMUnTgLOK5UnBNN3AACAY+UQMAWA61g1Nf75D8T3z9cmAvk60ND4Xz7rZVwvZT4hiGHAVAAAAI7TynIScB3DwOvYm2+FgKnuPgQYAGd6YIIkTAoCAAAAAElFTkSuQmCC" alt="">
 	<div id="form_container">
 
 		<h1><a>Katalog: Buch bearbeiten oder einfügen</a></h1>
-		<form class="appnitro" enctype="multipart/form-data" method="post" action="">
+		<form class="appnitro" enctype="multipart/form-data" method="post" action="<%= url_for('save')->to_abs %>">
 					<div class="form_description">
 			<h2>Neues Buch aufnehmen</h2>
 			<p>Pflichtfelder sind mit (*) markiert. Bei Mausbewegung über die Eingabefelder erscheint ein Hilfetext.</p>
@@ -216,31 +248,31 @@ __DATA__
 		<label class="description" for="element_11">Seiten, Abbildungen, Karten </label>
 		<div>
 			<input id="element_11" name="Seiten" class="element text small" type="text" maxlength="255" value=""/> 
-			<input id="element_11" name="Abbildungen" class="element text small" type="text" maxlength="255" value=""/> 
-			<input id="element_11" name="Karten" class="element text small" type="text" maxlength="255" value=""/> 
+			<input id="element_12" name="Abbildungen" class="element text small" type="text" maxlength="255" value=""/> 
+			<input id="element_13" name="Karten" class="element text small" type="text" maxlength="255" value=""/> 
 		</div><p class="guidelines" id="guide_11"><small>Anzahl der Seiten, der Abbildungen und der Karten im Werk</small></p> 
 		</li>		<li>
 		<label class="description" for="element_12">Standort / Besitzer </label>
 		<div>
-			<input id="element_12" name="Standort" class="element text medium" type="text" maxlength="255" value=""/> 
-		</div><p class="guidelines" id="guide_12"><small>Bei Werken im Fremdbesitz wird der Standort und Besitzer eingetragen.</small></p> 
+			<input id="element_14" name="Standort" class="element text medium" type="text" maxlength="255" value=""/> 
+		</div><p class="guidelines" id="guide_14"><small>Bei Werken im Fremdbesitz wird der Standort und Besitzer eingetragen.</small></p> 
 		</li>		<li>
-		<label class="description" for="element_13">Abbildung </label>
+		<label class="description" for="element_15">Abbildung </label>
 		<div>
-			<input id="element_13" name="Abbildung" class="element file" type="file"/> 
-		</div> <p class="guidelines" id="guide_13"><small>Frontansicht des Werkes, Buchdeckel oder Titelblatt</small></p> 
+			<input id="element_15" name="Abbildung" class="element file" type="file"/> 
+		</div> <p class="guidelines" id="guide_15"><small>Frontansicht des Werkes, Buchdeckel oder Titelblatt</small></p> 
 		</li>		<li>
-		<label class="description" for="element_14">Inhaltsverzeichnis</label>
+		<label class="description" for="element_16">Inhaltsverzeichnis</label>
 		<div>
-			<textarea id="element_14" name="Inhaltsverzeichnis" class="element textarea medium"></textarea> 
-		</div><p class="guidelines" id="guide_14"><small>Das Inhaltsverzeichnis des Werkes.</small></p> 
+			<textarea id="element_16" name="Inhaltsverzeichnis" class="element textarea medium"></textarea> 
+		</div><p class="guidelines" id="guide_16"><small>Das Inhaltsverzeichnis des Werkes.</small></p> 
 		</li>		<li>
-		<label class="description" for="element_15">Zustand</label>
+		<label class="description" for="element_17">Zustand</label>
 		<div>
-			<select multiple id="element_15" name="Zustand" class="element select">
-			%# foreach my $option (@{$status}) { >
-			<option value="<%#= $option->id >"><%#= $option->State></option>
-			%# }
+			<select id="element_17" name="Zustand" class="element select">
+			% foreach my $option (@$status) {
+			<option value="<%= @$option[0] %>"><%= @$option[1] %></option>
+			% }
 			</select> 
 		</div>
 		</li>
@@ -256,9 +288,8 @@ __DATA__
 @@ layouts/default.html.ep
 <!DOCTYPE html>
 <html>
-<head><meta charset="utf-8" /><title><%= title %></title></head>
+<head><meta charset="utf-8" /><title><%= title %></title>
 <link rel="stylesheet" type="text/css" href="view.css" media="all">
 </head>
 <body><%= content %></body></html>
-255:	final indentation level: -1
-255:	To save a full .LOG file rerun with -g
+
