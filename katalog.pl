@@ -42,6 +42,7 @@ sub create_db {
 			Kennziffer TEXT NOT NULL,
 			Erscheinungsjahr INTEGER,
 			Kaufjahr INTEGER,
+			Autoren TEXT,
 			Titel TEXT,
 			Untertitel TEXT,
 			Topografisch TEXT,
@@ -65,19 +66,13 @@ sub create_db {
 sub save_book {
 	my $params = shift;
 
-	$DB::single = 1;
-
 	my $sql = SQL::Abstract->new;
 	my ( $query, @bind ) = $sql->insert( "Buch", $params );
 	my $sth = $dbh->prepare($query)
 	  or die "could not prepare statement\n", $dbh->errstr;
 	$sth->execute(@bind) or die "could not execute", $sth->errstr;
 
-	# for storing the form fields
-	#my %form;
-	#foreach my $field (@fields) {
-	#	$form{$field} = $c->param($field);
-	#}
+	# for storing the uploaded file
 
 	#my $blob = `cat foo.jpg`;
 	#my $sth  = $db->prepare("INSERT INTO mytable VALUES (1, ?)");
@@ -210,71 +205,76 @@ __DATA__
 			<input id="element_3" name="Kaufjahr" class="element text small" type="text" maxlength="255" value=""/> 
 		</div><p class="guidelines" id="guide_1"><small>Eindeutige Nummer in der Form JJJJ-xyz. Das Jahr, in dem das Buch aufgelegt wurde. Das Jahr, in dem das Buch erworben wurde.</small></p> 
 		</li>		<li>
-		<label class="description" for="element_4">Titel </label>
+		<label class="description" for="element_4">Autoren </label>
 		<div>
-			<input id="element_4" name="Titel" class="element text large" type="text" maxlength="255" value=""/> 
-		</div><p class="guidelines" id="guide_4"><small>Titel des Buchs</small></p> 
+			<input id="element_4" name="Autoren" class="element text large" type="text" maxlength="255" value=""/> 
+		</div><p class="guidelines" id="guide_4"><small>Ein oder mehrere Autoren, durch Kommas getrennt.</small></p> 
 		</li>		<li>
-		<label class="description" for="element_5">Untertitel </label>
+		<label class="description" for="element_5">Titel </label>
 		<div>
-			<input id="element_5" name="Untertitel" class="element text large" type="text" maxlength="255" value=""/> 
-		</div><p class="guidelines" id="guide_5"><small>Untertitel des Buchs</small></p> 
+			<input id="element_5" name="Titel" class="element text large" type="text" maxlength="255" value=""/> 
+		</div><p class="guidelines" id="guide_5"><small>Titel des Buchs</small></p> 
 		</li>		<li>
-		<label class="description" for="element_6">Topografisch </label>
+		<label class="description" for="element_6">Untertitel </label>
 		<div>
-			<textarea id="element_6" name="Topografisch" class="element textarea medium"></textarea> 
-		</div><p class="guidelines" id="guide_6"><small>Orte, die das Buch behandelt. Ein Wort = ein Ort.</small></p> 
+			<input id="element_6" name="Untertitel" class="element text large" type="text" maxlength="255" value=""/> 
+		</div><p class="guidelines" id="guide_6"><small>Untertitel des Buchs</small></p> 
 		</li>		<li>
-		<label class="description" for="element_7">Verlag </label>
+		<label class="description" for="element_7">Topografisch </label>
 		<div>
-			<input id="element_7" name="Verlag" class="element text large" type="text" maxlength="255" value=""/> 
-		</div><p class="guidelines" id="guide_7"><small>Name des Verlags</small></p> 
+			<textarea id="element_7" name="Topografisch" class="element textarea medium"></textarea> 
+		</div><p class="guidelines" id="guide_7"><small>Orte, die das Buch behandelt. Ein Wort = ein Ort.</small></p> 
 		</li>		<li>
-		<label class="description" for="element_8">ISBN </label>
+		<label class="description" for="element_8">Verlag </label>
 		<div>
-			<input id="element_8" name="ISBN" class="element text small" type="text" maxlength="255" value=""/> 
-		</div><p class="guidelines" id="guide_8"><small>ISBN oder, falls nicht vorhanden, Verlagsnummer oder andere Identifikationsnummer des Werkes.</small></p> 
+			<input id="element_8" name="Verlag" class="element text large" type="text" maxlength="255" value=""/> 
+		</div><p class="guidelines" id="guide_8"><small>Name des Verlags</small></p> 
 		</li>		<li>
-		<label class="description" for="element_9">Dokumentart </label>
+		<label class="description" for="element_9">ISBN </label>
 		<div>
-			<input id="element_9" name="Dokumentart" class="element text medium" type="text" maxlength="255" value=""/> 
-		</div><p class="guidelines" id="guide_9"><small>Art des Werks: Buch gebunden oder ungebunden, Ansichtskarte, usw.</small></p> 
+			<input id="element_9" name="ISBN" class="element text small" type="text" maxlength="255" value=""/> 
+		</div><p class="guidelines" id="guide_9"><small>ISBN oder, falls nicht vorhanden, Verlagsnummer oder andere Identifikationsnummer des Werkes.</small></p> 
 		</li>		<li>
-		<label class="description" for="element_10">Format </label>
+		<label class="description" for="element_10">Dokumentart </label>
 		<div>
-			<input id="element_10" name="Format" class="element text medium" type="text" maxlength="255" value=""/> 
-		</div><p class="guidelines" id="guide_10"><small>Maße des Buchs</small></p> 
+			<input id="element_10" name="Dokumentart" class="element text medium" type="text" maxlength="255" value=""/> 
+		</div><p class="guidelines" id="guide_10"><small>Art des Werks: Buch gebunden oder ungebunden, Ansichtskarte, usw.</small></p> 
 		</li>		<li>
-		<label class="description" for="element_11">Seiten, Abbildungen, Karten </label>
+		<label class="description" for="element_11">Format </label>
 		<div>
-			<input id="element_11" name="Seiten" class="element text small" type="text" maxlength="255" value=""/> 
-			<input id="element_12" name="Abbildungen" class="element text small" type="text" maxlength="255" value=""/> 
-			<input id="element_13" name="Karten" class="element text small" type="text" maxlength="255" value=""/> 
-		</div><p class="guidelines" id="guide_11"><small>Anzahl der Seiten, der Abbildungen und der Karten im Werk</small></p> 
+			<input id="element_11" name="Format" class="element text medium" type="text" maxlength="255" value=""/> 
+		</div><p class="guidelines" id="guide_11"><small>Maße des Buchs</small></p> 
 		</li>		<li>
-		<label class="description" for="element_12">Standort / Besitzer </label>
+		<label class="description" for="element_12">Seiten, Abbildungen, Karten </label>
 		<div>
-			<input id="element_14" name="Standort" class="element text medium" type="text" maxlength="255" value=""/> 
-		</div><p class="guidelines" id="guide_14"><small>Bei Werken im Fremdbesitz wird der Standort und Besitzer eingetragen.</small></p> 
+			<input id="element_12" name="Seiten" class="element text small" type="text" maxlength="255" value=""/> 
+			<input id="element_13" name="Abbildungen" class="element text small" type="text" maxlength="255" value=""/> 
+			<input id="element_14" name="Karten" class="element text small" type="text" maxlength="255" value=""/> 
+		</div><p class="guidelines" id="guide_12"><small>Anzahl der Seiten, der Abbildungen und der Karten im Werk</small></p> 
 		</li>		<li>
-		<label class="description" for="element_15">Abbildung </label>
+		<label class="description" for="element_15">Standort / Besitzer </label>
 		<div>
-			<input id="element_15" name="Abbildung" class="element file" type="file"/> 
-		</div> <p class="guidelines" id="guide_15"><small>Frontansicht des Werkes, Buchdeckel oder Titelblatt</small></p> 
+			<input id="element_15" name="Standort" class="element text medium" type="text" maxlength="255" value=""/> 
+		</div><p class="guidelines" id="guide_15"><small>Bei Werken im Fremdbesitz wird der Standort und Besitzer eingetragen.</small></p> 
 		</li>		<li>
-		<label class="description" for="element_16">Inhaltsverzeichnis</label>
+		<label class="description" for="element_16">Abbildung </label>
 		<div>
-			<textarea id="element_16" name="Inhaltsverzeichnis" class="element textarea medium"></textarea> 
-		</div><p class="guidelines" id="guide_16"><small>Das Inhaltsverzeichnis des Werkes.</small></p> 
+			<input id="element_16" name="Abbildung" class="element file" type="file"/> 
+		</div> <p class="guidelines" id="guide_16"><small>Frontansicht des Werkes, Buchdeckel oder Titelblatt</small></p> 
 		</li>		<li>
-		<label class="description" for="element_17">Zustand</label>
+		<label class="description" for="element_17">Inhaltsverzeichnis</label>
 		<div>
-			<select id="element_17" name="Zustand" class="element select">
+			<textarea id="element_17" name="Inhaltsverzeichnis" class="element textarea medium"></textarea> 
+		</div><p class="guidelines" id="guide_17"><small>Das Inhaltsverzeichnis des Werkes.</small></p> 
+		</li>		<li>
+		<label class="description" for="element_18">Zustand</label>
+		<div>
+			<select id="element_18" name="Zustand" class="element select">
 			% foreach my $option (@$status) {
 			<option value="<%= @$option[0] %>"><%= @$option[1] %></option>
 			% }
 			</select> 
-		</div>
+		</div><p class="guidelines" id="guide_18"><small>Zustand des Eintrags im Katalog.</small></p> 
 		</li>
 
 		<li class="buttons">
