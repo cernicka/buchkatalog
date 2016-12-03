@@ -1,5 +1,10 @@
 #!/usr/bin/env perl
 
+# Martin Černička: a book library
+# TODO: search with autocomplete?
+# https://stackoverflow.com/questions/7358856/mojoliciouslite-jquery-autocomplete-question
+# a bigger application: https://mrpws.blogspot.co.at/p/mojolociouslite-script-courts3pl.html
+
 use common::sense;
 
 use Mojolicious::Lite;
@@ -8,6 +13,7 @@ use SQL::Abstract;
 
 my $dbh = DBI->connect( 'dbi:SQLite:dbname=katalog.db',
 	'', '', { sqlite_unicode => 1 } );
+my $sql = SQL::Abstract->new;
 
 # all fields from the form, database table Buch
 my @fields = (
@@ -17,7 +23,7 @@ my @fields = (
 	'Verlag',             'ISBN',
 	'Dokumentart',        'Format',
 	'Seiten',             'Abbildungen',
-	'Karten',             'Schlüsselwörter',
+	'Karten',             'Schluesselwoerter',
 	'Standort',           'Abbildung',
 	'Inhaltsverzeichnis', 'Zustand'
 );
@@ -66,7 +72,6 @@ sub create_db {
 sub save_book {
 	my $params = shift;
 
-	my $sql = SQL::Abstract->new;
 	my ( $query, @bind ) = $sql->insert( "Buch", $params );
 	my $sth = $dbh->prepare($query)
 	  or die "could not prepare statement\n", $dbh->errstr;
@@ -109,18 +114,18 @@ helper(
 	}
 );
 
-helper sql_select => sub {
-	my ( $c, $search, $order ) = @_;
+helper search_sql => sub {
+	my ( $c, $where, $order ) = @_;
 
-	my @columns = qw/ip country_name city latitude longitude/;
-	my @where =
-	  map { +{ $_ => { '-like' => $search } } } ( $search ? @columns : () );
+	my @columns = qw/id kennziffer Autoren Titel/;
 
-	my $sql = SQL::Abstract->new;
 	my ( $stmt, @bind ) =
-	  $sql->select( 'geo_data', \@columns, \@where, $order || [] );
+	  $sql->select( 'Buch', \@columns, $where, $order || [] );
 
-	return $stmt, \@bind;
+	my $sth = $dbh->prepare($stmt);
+	$sth->execute(@bind);
+
+	return $sth->fetchall_arrayref;
 };
 
 get '/' => sub {
@@ -154,8 +159,15 @@ get '/search_sql' => sub {
 
 post '/search_sql' => sub {
 	my $c = shift;
+	$c->stash( rows => $c->search_sql( $c->param('sqltext') ) );
+	# TODO: return also a list of matched IDs -> paging
+} => 'search_sql_result';
 
-} => 'search_sql_result';    # or call form()
+get '/edit' => sub {
+	my $c = shift;
+
+	# add submit button to template: save new, update?
+} => 'form';
 
 if ( exists $ENV{PAR_TEMP} && $^O eq "MSWin32" ) {
 	system qw(start http://localhost:3000);
@@ -171,7 +183,7 @@ __DATA__
 % title 'Katalog';
 <p>Bücher im Katalog: <%= $count %><br>
 
-<ul>
+<p><ul>
 	<li><a href="search">Suche</a>
 	<li><a href="search_sql">Suche SQL</a>
 	<li><a href="form">Neues Buch</a>
@@ -180,13 +192,33 @@ __DATA__
 @@ search_sql.html.ep
 % layout 'default';
 % title 'Suche im Katalog';
+<p>Suchtext SQL eingeben.
+<form enctype="multipart/form-data" method="post" action="<%= url_for('search_sql')->to_abs %>">
+	<p><textarea name="sqltext"></textarea>
+	<p><input type="submit" value="Suchen" />
+</form>
+</p>
+
+@@ search_sql_result.html.ep
+% layout 'default';
+% title 'Suchergebnisse';
+<table border="1">
+	<tr><th>Aktion</th><th>id</th><th>Kennziffer</th><th>Autoren</th><th>Titel</th> </tr>
+	% foreach my $row (@$rows) {
+		<tr><td><a href="<%= url_for('edit')->query(id => @$row[0])->to_abs %>">Ändern</a></a></td>
+		% foreach my $text (@$row) {
+			<td><%= $text %></td>
+		% }
+		</tr>
+	% }
+</table>
 
 @@ form.html.ep
 % layout 'default';
 % title 'Katalog: Buch bearbeiten';
 <!--<body id="main_body" >-->
 
-	<img id="top" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAwIAAAAKCAYAAAAHB+lIAAAABGdBTUEAANbY1E9YMgAAABl0RVh0U29mdHdhcmUAQWRvYmUgSW1hZ2VSZWFkeXHJZTwAAAEzSURBVHja7NvrbsIwDAbQpBT2/q87xrIVtZPrXrQhlU3aOZJJIOW/Pxxqa60AAAD/Sz+81Fr3nqkPngEAAMdqj5wNw4D+G819XdlXgQAAAP5MAGg/DQb9RkO/tsbaCwUAAMDzwkBcY9V0Ft/PgsBe89+ldSsUAAAAzw0Bsd7TmkPAVxjYmwjE5n+oU9jnUCAMAADA74SA2PwPdRt78xwKNicCJYWALoWAPoWBriwnBAAAwPFBoKXmP4eAGAZKmU8IVoNAvg50CiHgnALBqSynAwAAwPFBIP7afxvrLQSAKQxMz9ewnwWBfMUnTgLOK5UnBNN3AACAY+UQMAWA61g1Nf75D8T3z9cmAvk60ND4Xz7rZVwvZT4hiGHAVAAAAI7TynIScB3DwOvYm2+FgKnuPgQYAGd6YIIkTAoCAAAAAElFTkSuQmCC" alt="">
+	<img id="top" src="top.png" alt="">
 	<div id="form_container">
 
 		<h1><a>Katalog: Buch bearbeiten oder einfügen</a></h1>
@@ -200,7 +232,7 @@ __DATA__
 					<li>
 		<label class="description" for="element_1">Kennziffer, Erscheinungsjahr, Kaufjahr</label>
 		<div>
-			<input id="element_1" name="Kennziffer" class="element text small" type="text" maxlength="255" value=""/> 
+			<input id="element_1" name="Kennziffer" value="<%= test1" class="element text small" type="text" maxlength="255" value=""/> 
 			<input id="element_2" name="Erscheinungsjahr" class="element text small" type="text" maxlength="255" value=""/> 
 			<input id="element_3" name="Kaufjahr" class="element text small" type="text" maxlength="255" value=""/> 
 		</div><p class="guidelines" id="guide_1"><small>Eindeutige Nummer in der Form JJJJ-xyz. Das Jahr, in dem das Buch aufgelegt wurde. Das Jahr, in dem das Buch erworben wurde.</small></p> 
@@ -220,61 +252,66 @@ __DATA__
 			<input id="element_6" name="Untertitel" class="element text large" type="text" maxlength="255" value=""/> 
 		</div><p class="guidelines" id="guide_6"><small>Untertitel des Buchs</small></p> 
 		</li>		<li>
+		<label class="description" for="element_9">Verlag </label>
+		<div>
+			<input id="element_9" name="Verlag" class="element text large" type="text" maxlength="255" value=""/> 
+		</div><p class="guidelines" id="guide_9"><small>Name des Verlags</small></p> 
+		</li>		<li>
+		<label class="description" for="element_10">ISBN </label>
+		<div>
+			<input id="element_10" name="ISBN" class="element text small" type="text" maxlength="255" value=""/> 
+		</div><p class="guidelines" id="guide_10"><small>ISBN oder, falls nicht vorhanden, Verlagsnummer oder andere Identifikationsnummer des Werkes.</small></p> 
+		</li>		<li>
+		<label class="description" for="element_11">Dokumentart </label>
+		<div>
+			<input id="element_11" name="Dokumentart" class="element text medium" type="text" maxlength="255" value=""/> 
+		</div><p class="guidelines" id="guide_11"><small>Art des Werks: Buch gebunden oder ungebunden, Ansichtskarte, usw.</small></p> 
+		</li>		<li>
+		<label class="description" for="element_12">Format </label>
+		<div>
+			<input id="element_12" name="Format" class="element text medium" type="text" maxlength="255" value=""/> 
+		</div><p class="guidelines" id="guide_12"><small>Maße des Buchs</small></p> 
+		</li>		<li>
+		<label class="description" for="element_13">Seiten, Abbildungen, Karten </label>
+		<div>
+			<input id="element_13" name="Seiten" class="element text small" type="text" maxlength="255" value=""/> 
+			<input id="element_14" name="Abbildungen" class="element text small" type="text" maxlength="255" value=""/> 
+			<input id="element_15" name="Karten" class="element text small" type="text" maxlength="255" value=""/> 
+		</div><p class="guidelines" id="guide_13"><small>Anzahl der Seiten, der Abbildungen und der Karten im Werk</small></p> 
+		</li>		<li>
+		<label class="description" for="element_16">Standort / Besitzer </label>
+		<div>
+			<input id="element_16" name="Standort" class="element text medium" type="text" maxlength="255" value=""/> 
+		</div><p class="guidelines" id="guide_16"><small>Bei Werken im Fremdbesitz wird der Standort und Besitzer eingetragen.</small></p> 
+		</li>		<li>
 		<label class="description" for="element_7">Topografisch </label>
 		<div>
 			<textarea id="element_7" name="Topografisch" class="element textarea medium"></textarea> 
 		</div><p class="guidelines" id="guide_7"><small>Orte, die das Buch behandelt. Ein Wort = ein Ort.</small></p> 
 		</li>		<li>
-		<label class="description" for="element_8">Verlag </label>
+		<label class="description" for="element_8">Schlüsselwörter </label>
 		<div>
-			<input id="element_8" name="Verlag" class="element text large" type="text" maxlength="255" value=""/> 
-		</div><p class="guidelines" id="guide_8"><small>Name des Verlags</small></p> 
+			<textarea id="element_8" name="Schlüsselwörter" class="element textarea medium"></textarea>
+		</div><p class="guidelines" id="guide_8"><small>Schlüsselwörter, die mit dem Werk zusammenhängen.</small></p> 
 		</li>		<li>
-		<label class="description" for="element_9">ISBN </label>
+		<label class="description" for="element_17">Abbildung </label>
 		<div>
-			<input id="element_9" name="ISBN" class="element text small" type="text" maxlength="255" value=""/> 
-		</div><p class="guidelines" id="guide_9"><small>ISBN oder, falls nicht vorhanden, Verlagsnummer oder andere Identifikationsnummer des Werkes.</small></p> 
+			<input id="element_17" name="Abbildung" class="element file" type="file"/> 
+		</div> <p class="guidelines" id="guide_17"><small>Frontansicht des Werkes, Buchdeckel oder Titelblatt</small></p> 
 		</li>		<li>
-		<label class="description" for="element_10">Dokumentart </label>
+		<label class="description" for="element_18">Inhaltsverzeichnis</label>
 		<div>
-			<input id="element_10" name="Dokumentart" class="element text medium" type="text" maxlength="255" value=""/> 
-		</div><p class="guidelines" id="guide_10"><small>Art des Werks: Buch gebunden oder ungebunden, Ansichtskarte, usw.</small></p> 
+			<textarea id="element_18" name="Inhaltsverzeichnis" class="element textarea medium"></textarea> 
+		</div><p class="guidelines" id="guide_18"><small>Das Inhaltsverzeichnis des Werkes.</small></p> 
 		</li>		<li>
-		<label class="description" for="element_11">Format </label>
+		<label class="description" for="element_19">Zustand</label>
 		<div>
-			<input id="element_11" name="Format" class="element text medium" type="text" maxlength="255" value=""/> 
-		</div><p class="guidelines" id="guide_11"><small>Maße des Buchs</small></p> 
-		</li>		<li>
-		<label class="description" for="element_12">Seiten, Abbildungen, Karten </label>
-		<div>
-			<input id="element_12" name="Seiten" class="element text small" type="text" maxlength="255" value=""/> 
-			<input id="element_13" name="Abbildungen" class="element text small" type="text" maxlength="255" value=""/> 
-			<input id="element_14" name="Karten" class="element text small" type="text" maxlength="255" value=""/> 
-		</div><p class="guidelines" id="guide_12"><small>Anzahl der Seiten, der Abbildungen und der Karten im Werk</small></p> 
-		</li>		<li>
-		<label class="description" for="element_15">Standort / Besitzer </label>
-		<div>
-			<input id="element_15" name="Standort" class="element text medium" type="text" maxlength="255" value=""/> 
-		</div><p class="guidelines" id="guide_15"><small>Bei Werken im Fremdbesitz wird der Standort und Besitzer eingetragen.</small></p> 
-		</li>		<li>
-		<label class="description" for="element_16">Abbildung </label>
-		<div>
-			<input id="element_16" name="Abbildung" class="element file" type="file"/> 
-		</div> <p class="guidelines" id="guide_16"><small>Frontansicht des Werkes, Buchdeckel oder Titelblatt</small></p> 
-		</li>		<li>
-		<label class="description" for="element_17">Inhaltsverzeichnis</label>
-		<div>
-			<textarea id="element_17" name="Inhaltsverzeichnis" class="element textarea medium"></textarea> 
-		</div><p class="guidelines" id="guide_17"><small>Das Inhaltsverzeichnis des Werkes.</small></p> 
-		</li>		<li>
-		<label class="description" for="element_18">Zustand</label>
-		<div>
-			<select id="element_18" name="Zustand" class="element select">
+			<select id="element_19" name="Zustand" class="element select">
 			% foreach my $option (@$status) {
 			<option value="<%= @$option[0] %>"><%= @$option[1] %></option>
 			% }
 			</select> 
-		</div><p class="guidelines" id="guide_18"><small>Zustand des Eintrags im Katalog.</small></p> 
+		</div><p class="guidelines" id="guide_19"><small>Zustand des Eintrags im Katalog.</small></p> 
 		</li>
 
 		<li class="buttons">
@@ -283,7 +320,7 @@ __DATA__
 			</ul>
 		</form>	
 	</div>
-	<img id="bottom" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAwIAAAAKCAYAAAAHB+lIAAAABGdBTUEAANbY1E9YMgAAABl0RVh0U29mdHdhcmUAQWRvYmUgSW1hZ2VSZWFkeXHJZTwAAAFBSURBVHja7N1RT4MwGAXQMuv8/z9XGVRI2uSzlmU+DE08J7kBBnzPvRtkUyklTZuU0p7LlpeavOW15rrlrW6v4Vy79lLv3wMAADxHqVm3LDXzltuWj5r3up3DuXbtfl/Z5cHgtS7ol8Hifq2DclcCLvW8IgAAAM8tAm1dHsvArWauJeAWCkC7tsRBuRs4KgOxeSyhAMQSMCkCAABwWhEogzIQC8GoBMSkfDC8De6Pl0EB8GsAAACcXwbWO4VgVAK+yHeGpq41tOGxBMQAAADnlYF+rT5KOSoDuRs2hf32eFDpjvsXg2MJUAgAAOC5BaDfL4MFf/840Lf78wPDp7A9eolYCQAAgPPLQOoW+2VQAMpoyNGjQdNBc/DtPwAA/N1i8Mj+sAike63h4HOFAAAAfrcA/Pj8tP+hGAAA8L98CjAAlCWZhVgMBgwAAAAASUVORK5CYII=" alt="">
+	<img id="bottom" src="bottom.png" alt="">
 
 @@ layouts/default.html.ep
 <!DOCTYPE html>
