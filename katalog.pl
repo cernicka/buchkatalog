@@ -1,9 +1,11 @@
 #!/usr/bin/env perl
 
 # Martin Černička: a book library
-# TODO: search with autocomplete?
-# https://stackoverflow.com/questions/7358856/mojoliciouslite-jquery-autocomplete-question
-# a bigger application: https://mrpws.blogspot.co.at/p/mojolociouslite-script-courts3pl.html
+# TODO: search with autocomplete? https://stackoverflow.com/questions/7358856/mojoliciouslite-jquery-autocomplete-question
+# TODO: navigation using Mojolicious::Plugin::Toto, https://github.com/bduggan/beer
+# TODO: save book pictures in a separate table
+# TODO: check form values using Mojolicious::Plugin::Validator
+# a bigger example: https://mrpws.blogspot.co.at/p/mojolociouslite-script-courts3pl.html
 
 use common::sense;
 
@@ -15,8 +17,10 @@ my $dbh = DBI->connect( 'dbi:SQLite:dbname=katalog.db',
 	'', '', { sqlite_unicode => 1 } );
 my $sql = SQL::Abstract->new;
 
+my @searched_columns = qw/id Kennziffer Autoren Titel/;
+
 # all fields from the form, database table Buch
-my @fields = (
+my @all_columns = (
 	'Kennziffer',         'Erscheinungsjahr',
 	'Kaufjahr',           'Titel',
 	'Untertitel',         'Topografisch',
@@ -115,17 +119,16 @@ helper(
 );
 
 helper search_sql => sub {
-	my ( $c, $where, $order ) = @_;
+	my ( $c, $where, $order, $columns ) = @_;
 
-	my @columns = qw/id kennziffer Autoren Titel/;
-
+	#$DB::single = 1;
 	my ( $stmt, @bind ) =
-	  $sql->select( 'Buch', \@columns, $where, $order || [] );
+	  $sql->select( 'Buch', $columns, $where, $order || [] );
 
 	my $sth = $dbh->prepare($stmt);
 	$sth->execute(@bind);
 
-	return $sth->fetchall_arrayref;
+	return $sth;    #->fetchall_arrayref;
 };
 
 get '/' => sub {
@@ -144,11 +147,8 @@ get '/form' => sub {
 post '/save' => sub {
 	my $c = shift;
 
-	#my $params = $c->req->params->names;
 	my $params = $c->req->params->to_hash;
 	save_book( $params, $c->req->uploads, $c->req->upload('Abbildung') );
-
-	#my $insert = $c->insert( $name, $age );
 
 	$c->redirect_to('/');
 };
@@ -159,16 +159,26 @@ get '/search_sql' => sub {
 
 post '/search_sql' => sub {
 	my $c = shift;
-	$c->stash( rows => $c->search_sql( $c->param('sqltext') ) );
-	# TODO: return also a list of matched IDs -> paging
+
+	$c->stash(
+		sth => $c->search_sql(
+			$c->param('sqltext'),
+			undef, undef, \@searched_columns
+		),
+		searched_columns => \@searched_columns
+	);
+
+	# TODO: return also a list of matched IDs -> paging inside the results
 } => 'search_sql_result';
 
 get '/edit' => sub {
 	my $c = shift;
+	$c->stash( sth=>$c->search_sql( $c->param('id'), undef, undef, \@all_columns ) );
 
 	# add submit button to template: save new, update?
 } => 'form';
 
+# automatically open a browser window in Windows
 if ( exists $ENV{PAR_TEMP} && $^O eq "MSWin32" ) {
 	system qw(start http://localhost:3000);
 }
@@ -203,11 +213,16 @@ __DATA__
 % layout 'default';
 % title 'Suchergebnisse';
 <table border="1">
-	<tr><th>Aktion</th><th>id</th><th>Kennziffer</th><th>Autoren</th><th>Titel</th> </tr>
-	% foreach my $row (@$rows) {
-		<tr><td><a href="<%= url_for('edit')->query(id => @$row[0])->to_abs %>">Ändern</a></a></td>
-		% foreach my $text (@$row) {
-			<td><%= $text %></td>
+	<tr><th>Aktion</th>
+	% foreach my $header (@$searched_columns) {
+		<th><%= $header %></th>
+	% }
+	</tr>
+
+	% while( my $row = $sth->fetchrow_hashref) {
+		<tr><td><a href="<%= url_for('edit')->query(id => $row->{id})->to_abs %>">Ändern</a></a></td>
+		% foreach my $field (@$searched_columns) {
+			<td><%= $row->{$field} %></td>
 		% }
 		</tr>
 	% }
@@ -232,7 +247,9 @@ __DATA__
 					<li>
 		<label class="description" for="element_1">Kennziffer, Erscheinungsjahr, Kaufjahr</label>
 		<div>
-			<input id="element_1" name="Kennziffer" value="<%= test1" class="element text small" type="text" maxlength="255" value=""/> 
+			<input id="element_1" name="Kennziffer" value="<%= stash('Kennziffer') %>"
+			% if (my $p = stash 'Kennziffer') { print("value=\"$p\" "); }
+			class="element text small" type="text" maxlength="255" value=""/> 
 			<input id="element_2" name="Erscheinungsjahr" class="element text small" type="text" maxlength="255" value=""/> 
 			<input id="element_3" name="Kaufjahr" class="element text small" type="text" maxlength="255" value=""/> 
 		</div><p class="guidelines" id="guide_1"><small>Eindeutige Nummer in der Form JJJJ-xyz. Das Jahr, in dem das Buch aufgelegt wurde. Das Jahr, in dem das Buch erworben wurde.</small></p> 
