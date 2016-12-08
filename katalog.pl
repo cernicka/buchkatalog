@@ -1,6 +1,10 @@
 #!/usr/bin/env perl
 
 # Martin Černička: a book library
+# Credits to Joel Berger for his excellent examples which got me started:
+# Mojolicious http://blogs.perl.org/users/joel_berger/2012/10/a-simple-mojoliciousdbi-example.html
+# SQL::Abstract https://gist.github.com/jberger/6984429
+
 # TODO: search with autocomplete? https://stackoverflow.com/questions/7358856/mojoliciouslite-jquery-autocomplete-question
 # TODO: navigation using Mojolicious::Plugin::Toto, https://github.com/bduggan/beer
 # TODO: save book pictures in a separate table
@@ -21,19 +25,22 @@ my @searched_columns = qw/id Kennziffer Autoren Titel/;
 
 # all fields from the form, database table Buch
 my @all_columns = (
-	'Kennziffer',         'Erscheinungsjahr',
-	'Kaufjahr',           'Titel',
-	'Untertitel',         'Topografisch',
-	'Verlag',             'ISBN',
-	'Dokumentart',        'Format',
-	'Seiten',             'Abbildungen',
-	'Karten',             'Schluesselwoerter',
-	'Standort',           'Abbildung',
-	'Inhaltsverzeichnis', 'Zustand'
+	'Kennziffer',   'Erscheinungsjahr',
+	'Kaufjahr',     'Autoren',
+	'Titel',        'Untertitel',
+	'Verlag',       'ISBN',
+	'Dokumentart',  'Format',
+	'Seiten',       'Abbildungen',
+	'Karten',       'Standort',
+	'Topografisch', 'Schlüsselwörter',
+	'Abbildung',    'Inhaltsverzeichnis',
+	'Zustand',
 );
 
 sub create_db {
 	$dbh->do("PRAGMA foreign_keys = ON");
+
+	# TODO: check if the table exists and only insert upon creation
 	$dbh->do(
 		'CREATE TABLE IF NOT EXISTS Zustand (
 				id INTEGER PRIMARY KEY,
@@ -76,13 +83,19 @@ sub create_db {
 sub save_book {
 	my $params = shift;
 
-	my ( $query, @bind ) = $sql->insert( "Buch", $params );
-	my $sth = $dbh->prepare($query)
-	  or die "could not prepare statement\n", $dbh->errstr;
-	$sth->execute(@bind) or die "could not execute", $sth->errstr;
+	if ( defined $params->{id} ) {
+		my ( $query, @bind ) = $sql->update( "Buch", $params, "id=$params->{id}");
+		my $sth = $dbh->prepare($query)
+		  or die "could not prepare statement\n", $dbh->errstr;
+		$sth->execute(@bind) or die "could not execute", $sth->errstr;
+	} else {
+		my ( $query, @bind ) = $sql->insert( "Buch", $params );
+		my $sth = $dbh->prepare($query)
+		  or die "could not prepare statement\n", $dbh->errstr;
+		$sth->execute(@bind) or die "could not execute", $sth->errstr;
+	}
 
-	# for storing the uploaded file
-
+	# store uploaded file
 	#my $blob = `cat foo.jpg`;
 	#my $sth  = $db->prepare("INSERT INTO mytable VALUES (1, ?)");
 	#$sth->bind_param( 1, $blob, SQL_BLOB );
@@ -121,14 +134,13 @@ helper(
 helper search_sql => sub {
 	my ( $c, $where, $order, $columns ) = @_;
 
-	#$DB::single = 1;
 	my ( $stmt, @bind ) =
 	  $sql->select( 'Buch', $columns, $where, $order || [] );
 
 	my $sth = $dbh->prepare($stmt);
 	$sth->execute(@bind);
 
-	return $sth;    #->fetchall_arrayref;
+	return $sth;
 };
 
 get '/' => sub {
@@ -172,8 +184,18 @@ post '/search_sql' => sub {
 } => 'search_sql_result';
 
 get '/edit' => sub {
-	my $c = shift;
-	$c->stash( sth=>$c->search_sql( $c->param('id'), undef, undef, \@all_columns ) );
+	my $c           = shift;
+	my $status_rows = $c->select_status();
+	my $sth =
+	  $c->search_sql( 'id=' . $c->param('id'), undef, undef, \@all_columns );
+
+	# 'id' is unique, we only need to fetch one row. store the field values.
+	my $form = $sth->fetchrow_hashref;
+	foreach my $key ( keys %$form ) {
+		$c->stash( $key => $form->{$key} );
+	}
+
+	$c->stash( status => $status_rows, );
 
 	# add submit button to template: save new, update?
 } => 'form';
@@ -237,7 +259,11 @@ __DATA__
 	<div id="form_container">
 
 		<h1><a>Katalog: Buch bearbeiten oder einfügen</a></h1>
-		<form class="appnitro" enctype="multipart/form-data" method="post" action="<%= url_for('save')->to_abs %>">
+		<form class="appnitro" autocomplete="off" enctype="multipart/form-data" method="post" action="<%= url_for('save')->to_abs %>">
+			% if (stash('id')) {
+				<input type="hidden" name="id" value="<%= $id %>">
+			% }
+
 					<div class="form_description">
 			<h2>Neues Buch aufnehmen</h2>
 			<p>Pflichtfelder sind mit (*) markiert. Bei Mausbewegung über die Eingabefelder erscheint ein Hilfetext.</p>
@@ -247,68 +273,66 @@ __DATA__
 					<li>
 		<label class="description" for="element_1">Kennziffer, Erscheinungsjahr, Kaufjahr</label>
 		<div>
-			<input id="element_1" name="Kennziffer" value="<%= stash('Kennziffer') %>"
-			% if (my $p = stash 'Kennziffer') { print("value=\"$p\" "); }
-			class="element text small" type="text" maxlength="255" value=""/> 
-			<input id="element_2" name="Erscheinungsjahr" class="element text small" type="text" maxlength="255" value=""/> 
-			<input id="element_3" name="Kaufjahr" class="element text small" type="text" maxlength="255" value=""/> 
+			<input id="element_1" autofocus name="Kennziffer" value="<%= stash('Kennziffer') %>" class="element text small" type="text" maxlength="255" > 
+			<input id="element_2" name="Erscheinungsjahr" value="<%= stash('Erscheinungsjahr') %>" class="element text small" type="text" maxlength="255" > 
+			<input id="element_3" name="Kaufjahr" value="<%= stash('Kaufjahr') %>" class="element text small" type="text" maxlength="255" > 
 		</div><p class="guidelines" id="guide_1"><small>Eindeutige Nummer in der Form JJJJ-xyz. Das Jahr, in dem das Buch aufgelegt wurde. Das Jahr, in dem das Buch erworben wurde.</small></p> 
 		</li>		<li>
 		<label class="description" for="element_4">Autoren </label>
 		<div>
-			<input id="element_4" name="Autoren" class="element text large" type="text" maxlength="255" value=""/> 
+			<input id="element_4" name="Autoren" value="<%= stash('Autoren') %>" class="element text large" type="text" maxlength="255" > 
 		</div><p class="guidelines" id="guide_4"><small>Ein oder mehrere Autoren, durch Kommas getrennt.</small></p> 
 		</li>		<li>
 		<label class="description" for="element_5">Titel </label>
 		<div>
-			<input id="element_5" name="Titel" class="element text large" type="text" maxlength="255" value=""/> 
+			<input id="element_5" name="Titel" value="<%= stash('Titel') %>" class="element text large" type="text" maxlength="255" > 
 		</div><p class="guidelines" id="guide_5"><small>Titel des Buchs</small></p> 
 		</li>		<li>
 		<label class="description" for="element_6">Untertitel </label>
 		<div>
-			<input id="element_6" name="Untertitel" class="element text large" type="text" maxlength="255" value=""/> 
+			<input id="element_6" name="Untertitel" value="<%= stash('Untertitel') %>" class="element text large" type="text" maxlength="255" > 
 		</div><p class="guidelines" id="guide_6"><small>Untertitel des Buchs</small></p> 
 		</li>		<li>
 		<label class="description" for="element_9">Verlag </label>
 		<div>
-			<input id="element_9" name="Verlag" class="element text large" type="text" maxlength="255" value=""/> 
+			<input id="element_9" name="Verlag" value="<%= stash('Verlag') %>" class="element text large" type="text" maxlength="255" > 
 		</div><p class="guidelines" id="guide_9"><small>Name des Verlags</small></p> 
 		</li>		<li>
 		<label class="description" for="element_10">ISBN </label>
 		<div>
-			<input id="element_10" name="ISBN" class="element text small" type="text" maxlength="255" value=""/> 
+			<input id="element_10" name="ISBN" value="<%= stash('ISBN') %>" class="element text small" type="text" maxlength="255" > 
 		</div><p class="guidelines" id="guide_10"><small>ISBN oder, falls nicht vorhanden, Verlagsnummer oder andere Identifikationsnummer des Werkes.</small></p> 
 		</li>		<li>
 		<label class="description" for="element_11">Dokumentart </label>
 		<div>
-			<input id="element_11" name="Dokumentart" class="element text medium" type="text" maxlength="255" value=""/> 
+			<input id="element_11" name="Dokumentart" value="<%= stash('Dokumentart') %>" class="element text medium" type="text" maxlength="255" > 
 		</div><p class="guidelines" id="guide_11"><small>Art des Werks: Buch gebunden oder ungebunden, Ansichtskarte, usw.</small></p> 
 		</li>		<li>
 		<label class="description" for="element_12">Format </label>
 		<div>
-			<input id="element_12" name="Format" class="element text medium" type="text" maxlength="255" value=""/> 
+			<input id="element_12" name="Format" value="<%= stash('Format') %>" class="element text medium" type="text" maxlength="255" > 
 		</div><p class="guidelines" id="guide_12"><small>Maße des Buchs</small></p> 
 		</li>		<li>
 		<label class="description" for="element_13">Seiten, Abbildungen, Karten </label>
 		<div>
-			<input id="element_13" name="Seiten" class="element text small" type="text" maxlength="255" value=""/> 
-			<input id="element_14" name="Abbildungen" class="element text small" type="text" maxlength="255" value=""/> 
-			<input id="element_15" name="Karten" class="element text small" type="text" maxlength="255" value=""/> 
+			<input id="element_13" name="Seiten" value="<%= stash('Seiten') %>" class="element text small" type="text" maxlength="255" > 
+			<input id="element_14" name="Abbildungen" value="<%= stash('Abbildungen') %>" class="element text small" type="text" maxlength="255" > 
+			<input id="element_15" name="Karten" value="<%= stash('Karten') %>" class="element text small" type="text" maxlength="255" > 
 		</div><p class="guidelines" id="guide_13"><small>Anzahl der Seiten, der Abbildungen und der Karten im Werk</small></p> 
 		</li>		<li>
 		<label class="description" for="element_16">Standort / Besitzer </label>
 		<div>
-			<input id="element_16" name="Standort" class="element text medium" type="text" maxlength="255" value=""/> 
+			<input id="element_16" name="Standort" value="<%= stash('Standort') %>" class="element text medium" type="text" maxlength="255" > 
 		</div><p class="guidelines" id="guide_16"><small>Bei Werken im Fremdbesitz wird der Standort und Besitzer eingetragen.</small></p> 
 		</li>		<li>
 		<label class="description" for="element_7">Topografisch </label>
 		<div>
-			<textarea id="element_7" name="Topografisch" class="element textarea medium"></textarea> 
+			<textarea id="element_7" name="Topografisch" class="element textarea medium"><%= stash('Topografisch') %></textarea> 
 		</div><p class="guidelines" id="guide_7"><small>Orte, die das Buch behandelt. Ein Wort = ein Ort.</small></p> 
 		</li>		<li>
 		<label class="description" for="element_8">Schlüsselwörter </label>
 		<div>
-			<textarea id="element_8" name="Schlüsselwörter" class="element textarea medium"></textarea>
+			<textarea id="element_8" name="Schlüsselwörter" class="element textarea medium"><%= stash('Schlüsselwörter') %></textarea>
 		</div><p class="guidelines" id="guide_8"><small>Schlüsselwörter, die mit dem Werk zusammenhängen.</small></p> 
 		</li>		<li>
 		<label class="description" for="element_17">Abbildung </label>
@@ -318,14 +342,18 @@ __DATA__
 		</li>		<li>
 		<label class="description" for="element_18">Inhaltsverzeichnis</label>
 		<div>
-			<textarea id="element_18" name="Inhaltsverzeichnis" class="element textarea medium"></textarea> 
+			<textarea id="element_18" name="Inhaltsverzeichnis" class="element textarea medium"><%= stash('Inhaltsverzeichnis') %></textarea> 
 		</div><p class="guidelines" id="guide_18"><small>Das Inhaltsverzeichnis des Werkes.</small></p> 
 		</li>		<li>
 		<label class="description" for="element_19">Zustand</label>
 		<div>
 			<select id="element_19" name="Zustand" class="element select">
 			% foreach my $option (@$status) {
-			<option value="<%= @$option[0] %>"><%= @$option[1] %></option>
+			<option value="<%= @$option[0] %>"
+			% if (@$option[0] eq stash('Zustand')) {
+				selected
+			%	}
+			><%= @$option[1] %></option>
 			% }
 			</select> 
 		</div><p class="guidelines" id="guide_19"><small>Zustand des Eintrags im Katalog.</small></p> 
