@@ -17,6 +17,8 @@ use Mojolicious::Lite;
 use DBI;
 use SQL::Abstract;
 
+app->secrets( ['M4DYA6MaIQGIcuNj3'] );
+
 my $dbh = DBI->connect( 'dbi:SQLite:dbname=katalog.db',
 	'', '', { sqlite_unicode => 1 } );
 my $sql = SQL::Abstract->new;
@@ -80,22 +82,32 @@ sub create_db {
 	return 1;
 }
 
+# save a new/updated/deleted record
+# parameters: \%params - form fields
 sub save_book {
 	my $params = shift;
 
-	if ( defined $params->{id} ) {
-		my ( $query, @bind ) = $sql->update( "Buch", $params, "id=$params->{id}");
-		my $sth = $dbh->prepare($query)
-		  or die "could not prepare statement\n", $dbh->errstr;
-		$sth->execute(@bind) or die "could not execute", $sth->errstr;
+	my ( $query, @bind );
+
+	if ( defined $params->{id} && $params->{submit} eq "Löschen" ) {
+		( $query, @bind ) =
+		  $sql->delete( "Buch", { id => $params->{id} } );
+	} elsif ( defined $params->{id} ) {
+
+		# remove $params not relevant to the query
+		delete( $params->{submit} );
+
+		( $query, @bind ) =
+		  $sql->update( "Buch", $params, { id => $params->{id} } );
 	} else {
-		my ( $query, @bind ) = $sql->insert( "Buch", $params );
-		my $sth = $dbh->prepare($query)
-		  or die "could not prepare statement\n", $dbh->errstr;
-		$sth->execute(@bind) or die "could not execute", $sth->errstr;
+		( $query, @bind ) = $sql->insert( "Buch", $params );
 	}
 
-	# store uploaded file
+	my $sth = $dbh->prepare($query)
+	  or die "could not prepare statement\n", $dbh->errstr;
+	$sth->execute(@bind) or die "could not execute", $sth->errstr;
+
+	# TODO: store uploaded file in table Bilder
 	#my $blob = `cat foo.jpg`;
 	#my $sth  = $db->prepare("INSERT INTO mytable VALUES (1, ?)");
 	#$sth->bind_param( 1, $blob, SQL_BLOB );
@@ -187,7 +199,7 @@ get '/edit' => sub {
 	my $c           = shift;
 	my $status_rows = $c->select_status();
 	my $sth =
-	  $c->search_sql( 'id=' . $c->param('id'), undef, undef, \@all_columns );
+	  $c->search_sql( { id => $c->param('id') }, undef, undef, \@all_columns );
 
 	# 'id' is unique, we only need to fetch one row. store the field values.
 	my $form = $sth->fetchrow_hashref;
@@ -205,7 +217,6 @@ if ( exists $ENV{PAR_TEMP} && $^O eq "MSWin32" ) {
 	system qw(start http://localhost:3000);
 }
 
-app->secrets( ['M4DYA6MaIQGIcuNj3'] );
 app->start;
 
 __DATA__
@@ -223,7 +234,7 @@ __DATA__
 
 @@ search_sql.html.ep
 % layout 'default';
-% title 'Suche im Katalog';
+% title 'Katalog: Suche';
 <p>Suchtext SQL eingeben.
 <form enctype="multipart/form-data" method="post" action="<%= url_for('search_sql')->to_abs %>">
 	<p><textarea name="sqltext"></textarea>
@@ -233,7 +244,7 @@ __DATA__
 
 @@ search_sql_result.html.ep
 % layout 'default';
-% title 'Suchergebnisse';
+% title 'Katalog: Suchergebnisse';
 <table border="1">
 	<tr><th>Aktion</th>
 	% foreach my $header (@$searched_columns) {
@@ -258,7 +269,7 @@ __DATA__
 	<img id="top" src="top.png" alt="">
 	<div id="form_container">
 
-		<h1><a>Katalog: Buch bearbeiten oder einfügen</a></h1>
+		<h1><a>Katalog: Buch einfügen oder bearbeiten</a></h1>
 		<form class="appnitro" autocomplete="off" enctype="multipart/form-data" method="post" action="<%= url_for('save')->to_abs %>">
 			% if (stash('id')) {
 				<input type="hidden" name="id" value="<%= $id %>">
@@ -360,7 +371,8 @@ __DATA__
 		</li>
 
 		<li class="buttons">
-				<input type="submit" value="Speichern" />
+				<input type="submit" name="submit" value="Speichern" />
+				<input type="submit" name="submit" value="Löschen" />
 		</li>
 			</ul>
 		</form>	
