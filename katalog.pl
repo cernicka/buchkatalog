@@ -25,20 +25,6 @@ my $sql = SQL::Abstract->new;
 
 my @searched_columns = qw/id Kennziffer Autoren Titel/;
 
-# all fields from the form, database table Buch
-my @all_columns = (
-	'Kennziffer',   'Erscheinungsjahr',
-	'Kaufjahr',     'Autoren',
-	'Titel',        'Untertitel',
-	'Verlag',       'ISBN',
-	'Dokumentart',  'Format',
-	'Seiten',       'Abbildungen',
-	'Karten',       'Standort',
-	'Topografisch', 'Schlüsselwörter',
-	'Abbildung',    'Inhaltsverzeichnis',
-	'Zustand',
-);
-
 sub create_db {
 	$dbh->do("PRAGMA foreign_keys = ON");
 
@@ -184,6 +170,7 @@ get '/search_sql' => sub {
 post '/search_sql' => sub {
 	my $c = shift;
 
+	if (c->param('search') eq 'Suchen SQL') {
 	$c->stash(
 		sth => $c->search_sql(
 			$c->param('sqltext'),
@@ -192,14 +179,13 @@ post '/search_sql' => sub {
 		searched_columns => \@searched_columns
 	);
 
-	# TODO: return also a list of matched IDs -> paging inside the results
 } => 'search_sql_result';
 
 get '/edit' => sub {
 	my $c           = shift;
 	my $status_rows = $c->select_status();
 	my $sth =
-	  $c->search_sql( { id => $c->param('id') }, undef, undef, \@all_columns );
+	  $c->search_sql( { id => $c->param('id') });
 
 	# 'id' is unique, we only need to fetch one row. store the field values.
 	my $form = $sth->fetchrow_hashref;
@@ -227,8 +213,7 @@ __DATA__
 <p>Bücher im Katalog: <%= $count %><br>
 
 <p><ul>
-	<li><a href="search">Suche</a>
-	<li><a href="search_sql">Suche SQL</a>
+	<li><a href="search_sql">Suche</a>
 	<li><a href="form">Neues Buch</a>
 </ul>
 
@@ -236,15 +221,19 @@ __DATA__
 % layout 'default';
 % title 'Katalog: Suche';
 <p>Suchtext SQL eingeben.
-<form enctype="multipart/form-data" method="post" action="<%= url_for('search_sql')->to_abs %>">
+<form method="post" action="<%= url_for('search_sql')->to_abs %>">
 	<p><textarea name="sqltext"></textarea>
-	<p><input type="submit" value="Suchen" />
+	<p><input type="submit" name="search" value="Suchen SQL" />
+	<input type="submit" name="search" value="Suchen" />
 </form>
 </p>
 
 @@ search_sql_result.html.ep
 % layout 'default';
 % title 'Katalog: Suchergebnisse';
+% # TODO: store also the list of found IDs -> paging inside the results.
+% #       problem: cookie size limit of 4096 B.
+
 <table border="1">
 	<tr><th>Aktion</th>
 	% foreach my $header (@$searched_columns) {
