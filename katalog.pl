@@ -163,11 +163,9 @@ post '/save' => sub {
 	$c->redirect_to('/');
 };
 
-get '/search_sql' => sub {
-	my $c = shift;
-} => 'search_sql';
+get '/search_form' => 'search_form';
 
-post '/search_sql' => sub {
+any '/search' => sub {
 	my $c = shift;
 
 	if ( $c->param('search') eq 'Suchen SQL' ) {
@@ -185,6 +183,8 @@ post '/search_sql' => sub {
 get '/edit' => sub {
 	my $c           = shift;
 	my $status_rows = $c->select_status();
+
+	# get the row for a given 'id'
 	my $sth =
 	  $c->search_sql( { id => $c->param('id') } );
 
@@ -214,15 +214,15 @@ __DATA__
 <p>Bücher im Katalog: <%= $count %><br>
 
 <p><ul>
-	<li><a href="search_sql">Suche</a>
+	<li><a href="search_form">Suche</a>
 	<li><a href="form">Neues Buch</a>
 </ul>
 
-@@ search_sql.html.ep
+@@ search_form.html.ep
 % layout 'default';
 % title 'Katalog: Suche';
-<p>Suchtext SQL eingeben.
-<form method="post" action="<%= url_for('search_sql')->to_abs %>">
+<p>Suchtext eingeben.
+<form method="get" action="<%= url_for('search')->to_abs %>">
 	<p><textarea name="sqltext"></textarea>
 	<p><input type="submit" name="search" value="Suchen SQL" />
 	<input type="submit" name="search" value="Suchen" />
