@@ -9,7 +9,7 @@
 # TODO: navigation using Mojolicious::Plugin::Toto, https://github.com/bduggan/beer
 # TODO: save book pictures in a separate table
 # TODO: check form values using Mojolicious::Plugin::Validator
-# a bigger example: https://mrpws.blogspot.co.at/p/mojolociouslite-script-courts3pl.html
+# TODO: include template, nice routes: https://github.com/shoorick/mojowka/blob/master/mojowka
 
 use common::sense;
 
@@ -19,7 +19,7 @@ use SQL::Abstract;
 
 app->secrets( ['M4DYA6MaIQGIcuNj3'] );
 
-my $dbh = DBI->connect( 'dbi:SQLite:dbname=katalog.db',
+my $dbh = DBI->connect( 'dbi:SQLite:dbname=katalog.sqlite',
 	'', '', { sqlite_unicode => 1 } );
 my $sql = SQL::Abstract->new;
 
@@ -170,14 +170,15 @@ get '/search_sql' => sub {
 post '/search_sql' => sub {
 	my $c = shift;
 
-	if (c->param('search') eq 'Suchen SQL') {
-	$c->stash(
-		sth => $c->search_sql(
-			$c->param('sqltext'),
-			undef, undef, \@searched_columns
-		),
-		searched_columns => \@searched_columns
-	);
+	if ( $c->param('search') eq 'Suchen SQL' ) {
+		$c->stash(
+			sth => $c->search_sql(
+				$c->param('sqltext'),
+				undef, undef, \@searched_columns
+			),
+			searched_columns => \@searched_columns
+		);
+	}
 
 } => 'search_sql_result';
 
@@ -185,7 +186,7 @@ get '/edit' => sub {
 	my $c           = shift;
 	my $status_rows = $c->select_status();
 	my $sth =
-	  $c->search_sql( { id => $c->param('id') });
+	  $c->search_sql( { id => $c->param('id') } );
 
 	# 'id' is unique, we only need to fetch one row. store the field values.
 	my $form = $sth->fetchrow_hashref;
