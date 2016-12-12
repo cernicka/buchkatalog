@@ -11,8 +11,6 @@
 # TODO: check form values using Mojolicious::Plugin::Validator
 # TODO: include template, nice routes: https://github.com/shoorick/mojowka/blob/master/mojowka
 
-use common::sense;
-
 use Mojolicious::Lite;
 use DBI;
 use SQL::Abstract;
