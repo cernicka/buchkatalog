@@ -5,11 +5,12 @@
 # Mojolicious http://blogs.perl.org/users/joel_berger/2012/10/a-simple-mojoliciousdbi-example.html
 # SQL::Abstract https://gist.github.com/jberger/6984429
 
-# TODO: search with autocomplete? https://stackoverflow.com/questions/7358856/mojoliciouslite-jquery-autocomplete-question
+# TODO: search with autocomplete, without jquery https://stackoverflow.com/questions/7358856/mojoliciouslite-jquery-autocomplete-question
 # TODO: navigation using Mojolicious::Plugin::Toto, https://github.com/bduggan/beer
 # TODO: save book pictures in a separate table
 # TODO: check form values using Mojolicious::Plugin::Validator
 # TODO: include template, nice routes: https://github.com/shoorick/mojowka/blob/master/mojowka
+# TODO: search -> edit: display a drop down menu with all entries and paging (JavaScript)
 
 use Mojolicious::Lite;
 use DBI;
@@ -202,6 +203,21 @@ if ( exists $ENV{PAR_TEMP} && $^O eq "MSWin32" ) {
 	system qw(start http://localhost:3000);
 }
 
+app->hook(
+	'before_dispatch' => sub {
+		my $c = shift;
+		if ( $c->req->headers->header('X-Forwarded-Host') ) {
+
+			#Proxy Path setting
+			$c->req->url->base->scheme('https');
+			push @{ $c->req->url->base->path->trailing_slash(1) },
+			  shift @{ $c->req->url->path->leading_slash(0) };
+			$c->req->url->path->trailing_slash(0)    # root 404
+			  unless @{ $c->req->url->path->parts };
+		}
+	}
+);
+
 app->start;
 
 __DATA__
@@ -209,17 +225,15 @@ __DATA__
 @@ index.html.ep
 % layout 'default';
 % title 'Katalog';
-<p>Bücher im Katalog: <%= $count %><br>
+<p>Bücher im Katalog: <%= $count %>
 
-<p><ul>
-	<li><a href="search_form">Suche</a>
-	<li><a href="form">Neues Buch</a>
-</ul>
+<br><br>Version 2016-12-13: Erste Internetversion. Menü auf jeder Webseite hinzugefügt.
+<hr><p align="right">Autor: <i>martin@cernicka.eu</i></p>
 
 @@ search_form.html.ep
 % layout 'default';
 % title 'Katalog: Suche';
-<p>Suchtext eingeben.
+<p>Suchtext eingeben
 <form method="get" action="<%= url_for('search')->to_abs %>">
 	<p><textarea name="sqltext"></textarea>
 	<p><input type="submit" name="search" value="Suchen SQL" />
@@ -260,7 +274,7 @@ __DATA__
 		<h1><a>Katalog: Buch einfügen oder bearbeiten</a></h1>
 		<form class="appnitro" autocomplete="off" enctype="multipart/form-data" method="post" action="<%= url_for('save')->to_abs %>">
 			% if (stash('id')) {
-				<input type="hidden" name="id" value="<%= $id %>">
+				<input type="hidden" name="id" value="<%= stash('id') %>">
 			% }
 
 					<div class="form_description">
@@ -373,5 +387,9 @@ __DATA__
 <head><meta charset="utf-8" /><title><%= title %></title>
 <link rel="stylesheet" type="text/css" href="view.css" media="all">
 </head>
-<body><%= content %></body></html>
+<body>
+	<a href="<%= url_for('/') %>">Home</a> | 
+	<a href="<%= url_for('search_form') %>">Suche</a> | 
+	<a href="<%= url_for('form') %>">Neues Buch</a>
+<%= content %></body></html>
 
