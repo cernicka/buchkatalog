@@ -146,8 +146,9 @@ helper search_sql => sub {
 
 get '/' => sub {
 	my $c = shift;
-	$c->stash( count => $c->book_count()
-		  . "<br>base: "
+	$c->stash( count => $c->book_count() );
+
+	app->log->info( " base: "
 		  . $c->req->url->base
 		  . ", path: "
 		  . $c->req->url->base->path );
