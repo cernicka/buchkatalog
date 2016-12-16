@@ -18,6 +18,10 @@ use SQL::Abstract;
 
 app->secrets( ['M4DYA6MaIQGIcuNj3'] );
 
+# set this to the path you put your application into
+# e.g. for "ProxyPass /katalog http://localhost:8081/", use app_path='katalog'
+my $app_path = '';
+
 my $dbh = DBI->connect( 'dbi:SQLite:dbname=katalog.sqlite',
 	'', '', { sqlite_unicode => 1 } );
 my $sql = SQL::Abstract->new;
@@ -142,9 +146,12 @@ helper search_sql => sub {
 
 get '/' => sub {
 	my $c = shift;
-	$c->stash( count => $c->book_count() );
-	$c->render('index');
-};
+	$c->stash( count => $c->book_count()
+		  . "<br>base: "
+		  . $c->req->url->base
+		  . ", path: "
+		  . $c->req->url->base->path );
+} => 'index';
 
 get '/form' => sub {
 	my $c    = shift;
@@ -162,7 +169,7 @@ post '/save' => sub {
 	$c->redirect_to('/');
 };
 
-get '/search_form' => 'search_form';
+get "/search_form" => 'search_form';
 
 any '/search' => sub {
 	my $c = shift;
@@ -179,7 +186,7 @@ any '/search' => sub {
 
 } => 'search_sql_result';
 
-get '/edit' => sub {
+get "/edit" => sub {
 	my $c           = shift;
 	my $status_rows = $c->select_status();
 
@@ -198,11 +205,6 @@ get '/edit' => sub {
 	# add submit button to template: save new, update?
 } => 'form';
 
-# automatically open a browser window in Windows
-if ( exists $ENV{PAR_TEMP} && $^O eq "MSWin32" ) {
-	system qw(start http://localhost:3000);
-}
-
 app->hook(
 	'before_dispatch' => sub {
 		my $c = shift;
@@ -210,10 +212,7 @@ app->hook(
 
 			#Proxy Path setting
 			$c->req->url->base->scheme('https');
-			push @{ $c->req->url->base->path->trailing_slash(1) },
-			  shift @{ $c->req->url->path->leading_slash(0) };
-			$c->req->url->path->trailing_slash(0)    # root 404
-			  unless @{ $c->req->url->path->parts };
+			$c->req->url->base->path('katalog');
 		}
 	}
 );
@@ -282,7 +281,6 @@ __DATA__
 			<p>Pflichtfelder sind mit (*) markiert. Bei Mausbewegung über die Eingabefelder erscheint ein Hilfetext.</p>
 		</div>						
 			<ul >
-
 					<li>
 		<label class="description" for="element_1">Kennziffer, Erscheinungsjahr, Kaufjahr</label>
 		<div>
