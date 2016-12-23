@@ -158,7 +158,7 @@ get '/home' => sub {
 get '/form' => sub {
 	my $c    = shift;
 	my $rows = $c->select_status();
-	$c->stash( status => $rows );
+	$c->stash( buch_status => $rows );
 } => 'form';
 
 # save data from the form
@@ -168,7 +168,7 @@ post '/save' => sub {
 	my $params = $c->req->params->to_hash;
 	save_book( $params, $c->req->uploads, $c->req->upload('Abbildung') );
 
-	$c->redirect_to('/');
+	$c->redirect_to('/home');
 };
 
 get '/search_form' => 'search_form';
@@ -202,7 +202,7 @@ get '/edit' => sub {
 		$c->stash( $key => $form->{$key} );
 	}
 
-	$c->stash( status => $status_rows );
+	$c->stash( buch_status => $status_rows );
 } => 'form';
 
 #
@@ -231,7 +231,7 @@ __DATA__
 % title 'Katalog';
 <p>Bücher im Katalog: <%= $count %>
 
-<br><br>Version 2016-12-13: Erste Internetversion. Menü auf jeder Webseite hinzugefügt.
+<br><br>Version 2016-12-23: Erste Internetversion. Menü auf jeder Webseite hinzugefügt.
 <hr><p align="right">Autor: Martin Černička <a href="mailto:martin@cernicka.eu">&lt;martin@cernicka.eu&gt;</a></p>
 
 @@ search_form.html.ep
@@ -266,6 +266,7 @@ __DATA__
 		</tr>
 	% }
 </table>
+
 
 @@ form.html.ep
 % layout 'default';
@@ -364,7 +365,7 @@ __DATA__
 		<label class="description" for="element_19">Zustand</label>
 		<div>
 			<select id="element_19" name="Zustand" class="element select">
-			% foreach my $option (@$status) {
+			% foreach my $option (@$buch_status) {
 			<option value="<%= @$option[0] %>"
 			% if (@$option[0] eq stash('Zustand')) {
 				selected
