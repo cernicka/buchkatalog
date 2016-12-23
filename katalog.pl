@@ -15,6 +15,7 @@
 use Mojolicious::Lite;
 use DBI;
 use SQL::Abstract;
+use Data::Dumper;
 
 app->secrets( ['M4DYA6MaIQGIcuNj3'] );
 
@@ -96,9 +97,9 @@ sub save_book {
 	  or die "could not prepare statement\n", $dbh->errstr;
 	$sth->execute(@bind) or die "could not execute", $sth->errstr;
 
-	# TODO: store uploaded file in table Bilder
+	# TODO: store uploaded file in table Bild
 	#my $blob = `cat foo.jpg`;
-	#my $sth  = $db->prepare("INSERT INTO mytable VALUES (1, ?)");
+	#my $sth  = $db->prepare("INSERT INTO Bild (data) VALUES (?)");
 	#$sth->bind_param( 1, $blob, SQL_BLOB );
 	#$sth->execute();
 }
@@ -146,12 +147,12 @@ helper search_sql => sub {
 
 get '/' => sub {
 	my $c = shift;
-	$c->stash( count => $c->book_count() );
+	$c->redirect_to('/home');
+};
 
-	app->log->info( " base: "
-		  . $c->req->url->base
-		  . ", path: "
-		  . $c->req->url->base->path );
+get '/home' => sub {
+	my $c = shift;
+	$c->stash( count => $c->book_count() );
 } => 'index';
 
 get '/form' => sub {
@@ -170,7 +171,7 @@ post '/save' => sub {
 	$c->redirect_to('/');
 };
 
-get "/search_form" => 'search_form';
+get '/search_form' => 'search_form';
 
 any '/search' => sub {
 	my $c = shift;
@@ -187,7 +188,7 @@ any '/search' => sub {
 
 } => 'search_sql_result';
 
-get "/edit" => sub {
+get '/edit' => sub {
 	my $c           = shift;
 	my $status_rows = $c->select_status();
 
@@ -201,19 +202,22 @@ get "/edit" => sub {
 		$c->stash( $key => $form->{$key} );
 	}
 
-	$c->stash( status => $status_rows, );
-
-	# add submit button to template: save new, update?
+	$c->stash( status => $status_rows );
 } => 'form';
 
+#
+# change the base path, if deployed under a reverse proxy, e.g. with Apache:
+#	ProxyRequests Off
+#	ProxyPreserveHost Off
+#	ProxyPass /katalog/ http://localhost:8081/
+#	ProxyPassReverse /katalog/ http://localhost:8081/
+#	RequestHeader set X-Request-Base https://host.domain/katalog
+#
 app->hook(
-	'before_dispatch' => sub {
+	before_dispatch => sub {
 		my $c = shift;
-		if ( $c->req->headers->header('X-Forwarded-Host') ) {
-
-			#Proxy Path setting
-			$c->req->url->base->scheme('https');
-			$c->req->url->base->path('katalog');
+		if ( my $base = $c->req->headers->header('X-Request-Base') ) {
+			$c->req->url->base( Mojo::URL->new($base) );
 		}
 	}
 );
@@ -228,7 +232,7 @@ __DATA__
 <p>Bücher im Katalog: <%= $count %>
 
 <br><br>Version 2016-12-13: Erste Internetversion. Menü auf jeder Webseite hinzugefügt.
-<hr><p align="right">Autor: <i>martin@cernicka.eu</i></p>
+<hr><p align="right">Autor: Martin Černička <a href="mailto:martin@cernicka.eu">&lt;martin@cernicka.eu&gt;</a></p>
 
 @@ search_form.html.ep
 % layout 'default';
@@ -387,8 +391,8 @@ __DATA__
 <link rel="stylesheet" type="text/css" href="view.css" media="all">
 </head>
 <body>
-	<a href="<%= url_for('/') %>">Home</a> | 
-	<a href="<%= url_for('search_form') %>">Suche</a> | 
-	<a href="<%= url_for('form') %>">Neues Buch</a>
+	<a href="<%= url_for('/home') %>">Home</a> | 
+	<a href="<%= url_for('/search_form') %>">Suche</a> | 
+	<a href="<%= url_for('/form') %>">Neues Buch</a>
 <%= content %></body></html>
 
