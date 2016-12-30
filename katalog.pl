@@ -74,7 +74,7 @@ sub create_db {
 
 # save a new/updated/deleted record
 # parameters: \%params - form fields
-sub save_book {
+sub save_form {
 	my $params = shift;
 
 	my ( $query, @bind );
@@ -90,6 +90,10 @@ sub save_book {
 		( $query, @bind ) =
 		  $sql->update( "Buch", $params, { id => $params->{id} } );
 	} else {
+
+		# remove $params not relevant to the query
+		delete( $params->{submit} );
+
 		( $query, @bind ) = $sql->insert( "Buch", $params );
 	}
 
@@ -163,10 +167,10 @@ get '/form' => sub {
 
 # save data from the form
 post '/save' => sub {
-	my $c = shift;
-
+	my $c      = shift;
 	my $params = $c->req->params->to_hash;
-	save_book( $params, $c->req->uploads, $c->req->upload('Abbildung') );
+
+	save_form( $params, $c->req->uploads, $c->req->upload('Abbildung') );
 
 	$c->redirect_to('/home');
 };
