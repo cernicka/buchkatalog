@@ -184,7 +184,7 @@ any '/search' => sub {
 		$c->stash(
 			sth => $c->search_sql(
 				$c->param('sqltext'),
-				undef, undef, \@searched_columns
+				'Kennziffer', undef, \@searched_columns
 			),
 			searched_columns => \@searched_columns
 		);
