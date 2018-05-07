@@ -259,6 +259,7 @@ __DATA__
 % title 'Katalog';
 <p>Bücher im Katalog: <%= $count %>
 
+<br>Version 2018-05-07: Neue Kennziffer wird automatisch berechnet.
 <br><br>Version 2016-12-23: Erste Internetversion. Menü auf jeder Webseite hinzugefügt.
 <hr><p align="right">Autor: Martin Černička <a href="mailto:martin@cernicka.eu">&lt;martin@cernicka.eu&gt;</a></p>
 
