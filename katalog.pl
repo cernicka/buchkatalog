@@ -183,8 +183,8 @@ any '/search' => sub {
 	if ( $c->param('search') eq 'Suchen SQL' ) {
 		$c->stash(
 			sth => $c->search_sql(
-				$c->param('sqltext'),
-				'Kennziffer', undef, \@searched_columns
+				$c->param('sqltext'), 'Kennziffer',
+				undef,                \@searched_columns
 			),
 			searched_columns => \@searched_columns
 		);
@@ -208,6 +208,30 @@ get '/edit' => sub {
 
 	$c->stash( buch_status => $status_rows );
 } => 'form';
+
+# get highest Kennziffer from database and return a new one
+# parameters: Erscheinungsjahr
+# returns: Kennziffer
+# example: for Erscheinungsjahr=2017 returns "2017 - 003"
+get '/kennziffer' => sub {
+	my $c = shift;
+
+	my $sth = $dbh->prepare(
+		"select max(Kennziffer) from Buch where Kennziffer like ?");
+	$sth->execute( $c->param('erscheinungsjahr').'%' );
+	my ($kennziffer) = $sth->fetchrow_array;
+
+	my ( $year, $number );
+	if ( defined $kennziffer && $kennziffer ne "" ) {
+		( $year, $number ) = ( $kennziffer =~ /([0-9]+).*-.*([0-9]+)/ );
+		$number++;
+	} else {
+		( $year, $number ) = ( $c->param('erscheinungsjahr'), 1 );
+	}
+
+	# output txt instead of html
+	$c->render(text => "$year - " . sprintf( "%03d", $number), format => 'txt');
+};
 
 #
 # change the base path, if deployed under a reverse proxy, e.g. with Apache:
@@ -292,12 +316,12 @@ __DATA__
 		</div>						
 			<ul >
 					<li>
-		<label class="description" for="element_1">Kennziffer, Erscheinungsjahr, Kaufjahr</label>
+		<label class="description" for="element_1">Erscheinungsjahr, Kennziffer, Kaufjahr</label>
 		<div>
-			<input id="element_1" autofocus name="Kennziffer" value="<%= stash('Kennziffer') %>" class="element text small" type="text" maxlength="255" > 
-			<input id="element_2" name="Erscheinungsjahr" value="<%= stash('Erscheinungsjahr') %>" class="element text small" type="text" maxlength="255" > 
+			<input id="element_1" autofocus name="Erscheinungsjahr" value="<%= stash('Erscheinungsjahr') %>" class="element text small" type="text" maxlength="255" onchange="changeEventHandler()"> 
+			<input id="element_2" name="Kennziffer" value="<%= stash('Kennziffer') %>" class="element text small" type="text" maxlength="255" > 
 			<input id="element_3" name="Kaufjahr" value="<%= stash('Kaufjahr') %>" class="element text small" type="text" maxlength="255" > 
-		</div><p class="guidelines" id="guide_1"><small>Eindeutige Nummer in der Form JJJJ-xyz. Das Jahr, in dem das Buch aufgelegt wurde. Das Jahr, in dem das Buch erworben wurde.</small></p> 
+		</div><p class="guidelines" id="guide_1"><small>Das Jahr, in dem das Buch aufgelegt wurde. Eindeutige Nummer in der Form JJJJ - xyz. Das Jahr, in dem das Buch erworben wurde.</small></p> 
 		</li>		<li>
 		<label class="description" for="element_4">Autoren </label>
 		<div>
@@ -388,6 +412,30 @@ __DATA__
 		</form>	
 	</div>
 	<img id="bottom" src="bottom.png" alt="">
+
+	<script>
+	var xhr = new XMLHttpRequest();
+
+	xhr.onload = function () {
+    	if (xhr.readyState === xhr.DONE) {
+        	if (xhr.status === 200) {
+            	console.log(xhr.response);
+            	console.log(xhr.responseText);
+				document.getElementsByName("Kennziffer")[0].value = xhr.responseText;
+        	}
+    	}
+	}
+
+	function changeEventHandler() {
+		if (document.getElementsByName("Erscheinungsjahr")[0].value == "")
+			document.getElementsByName("Kennziffer")[0].value="Erscheinungsjahr eingeben!";
+		else {
+			xhr.open('GET', '/kennziffer?erscheinungsjahr=' + document.getElementsByName("Erscheinungsjahr")[0].value, true);
+			xhr.responseType = 'text';
+			xhr.send(null);
+		}
+	}
+	</script>
 
 @@ layouts/default.html.ep
 <!DOCTYPE html>
