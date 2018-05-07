@@ -419,8 +419,6 @@ __DATA__
 	xhr.onload = function () {
     	if (xhr.readyState === xhr.DONE) {
         	if (xhr.status === 200) {
-            	console.log(xhr.response);
-            	console.log(xhr.responseText);
 				document.getElementsByName("Kennziffer")[0].value = xhr.responseText;
         	}
     	}
@@ -430,7 +428,7 @@ __DATA__
 		if (document.getElementsByName("Erscheinungsjahr")[0].value == "")
 			document.getElementsByName("Kennziffer")[0].value="Erscheinungsjahr eingeben!";
 		else {
-			xhr.open('GET', '/kennziffer?erscheinungsjahr=' + document.getElementsByName("Erscheinungsjahr")[0].value, true);
+			xhr.open('GET', '<%= url_for('/kennziffer') %>?erscheinungsjahr=' + document.getElementsByName("Erscheinungsjahr")[0].value, true);
 			xhr.responseType = 'text';
 			xhr.send(null);
 		}
